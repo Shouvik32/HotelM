@@ -140,19 +140,37 @@ public class RoomController {
             @RequestParam(defaultValue = "maxGuestCapacity") String strategy
     ) {
         try {
+            System.out.println("Step 1: Starting room suggestion for hotel ID: " + hotelId);
             List<Room> availableRooms = roomService.getAllRoomsByHotel(hotelId);
-            System.out.println(availableRooms+"test c");
+            System.out.println("Step 2: Retrieved " + availableRooms.size() + " available rooms");
+            
+            System.out.println("Step 3: Calling suggestion strategy");
             List<Room> suggestedRooms = roomService.suggestedRooms(searchRoomRequestDto, availableRooms);
+            System.out.println("Step 4: Strategy returned " + suggestedRooms.size() + " suggested rooms");
+            
+            System.out.println("Step 5: Starting DTO mapping");
             List<RoomResponseDto> responseDtos = suggestedRooms.stream()
-                    .map(RoomResponseDto::from)
+                    .filter(room -> room != null) // Filter out any null rooms
+                    .map(room -> {
+                        System.out.println("Mapping room ID: " + room.getId());
+                        return RoomResponseDto.from(room);
+                    })
+                    .filter(dto -> dto != null) // Filter out any null DTOs  
                     .collect(Collectors.toList());
+            System.out.println("Step 6: DTO mapping completed, " + responseDtos.size() + " DTOs created");
+            
+            System.out.println("Step 7: Creating API response");
             return ResponseEntity.ok(new ApiResponse<>("success", "Suggested rooms fetched successfully", responseDtos));
         } catch (RoomNotFoundException e) {
+            System.err.println("RoomNotFoundException in suggestRooms: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponse<>("failure", "No suitable rooms found", null));
+                    .body(new ApiResponse<>("failure", "No suitable rooms found: " + e.getMessage(), null));
         } catch (Exception e) {
+            System.err.println("Exception in suggestRooms: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse<>("failure", "Error suggesting rooms", null));
+                    .body(new ApiResponse<>("failure", "Error suggesting rooms: " + e.getMessage(), null));
         }
     }
 }
