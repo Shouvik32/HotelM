@@ -6,6 +6,8 @@ import com.backendproject.hotel_system.Dtos.ResponseStatus;
 import com.backendproject.hotel_system.Dtos.SearchRoomRequestDto;
 import com.backendproject.hotel_system.Dtos.RoomResponseDto;
 import com.backendproject.hotel_system.Models.Room;
+import com.backendproject.hotel_system.bookingStrategies.MaxGuestCapacitySuggestion;
+import com.backendproject.hotel_system.bookingStrategies.RoomSuggestionStrategy;
 import com.backendproject.hotel_system.repositories.RoomRepository;
 import com.backendproject.hotel_system.services.RoomService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -153,5 +155,54 @@ public class RoomController {
             responseDto.setResponseStatus(ResponseStatus.FAILURE);
         }
         return responseDto;
+    }
+
+    @GetMapping(value = "/rooms/hotel/{hotelId}/suggest")
+    public List<RoomResponseDto> suggestRooms(@PathVariable Long hotelId, @RequestParam(defaultValue = "1") int noOfGuests) {
+        List<RoomResponseDto> responseList = new ArrayList<>();
+        
+        try {
+            System.out.println("Starting room suggestion for hotelId: " + hotelId + ", guests: " + noOfGuests);
+            
+            // Get all available rooms (since Room model doesn't have hotel relationship yet)
+            List<Room> availableRooms = roomService.getAllRooms();
+            System.out.println("Available rooms fetched: " + availableRooms.size() + " rooms");
+            
+            // Use suggestion strategy to get suggested rooms
+            RoomSuggestionStrategy suggestionStrategy = new MaxGuestCapacitySuggestion();
+            List<Room> suggestedRooms = suggestionStrategy.suggestRooms(noOfGuests, availableRooms);
+            System.out.println("Suggested rooms: " + suggestedRooms.size() + " rooms");
+            
+            // Map suggested rooms to DTOs
+            for (Room room : suggestedRooms) {
+                RoomResponseDto responseDto = new RoomResponseDto();
+                responseDto.setId(room.getId());
+                responseDto.setCreatedAt(room.getCreatedAt());
+                responseDto.setUpdatedAt(room.getUpdatedAt());
+                responseDto.setRoomNumber(room.getRoomNumber());
+                responseDto.setPrice(room.getPrice());
+                responseDto.setDescription(room.getDescription());
+                responseDto.setCapacity(room.getCapacity());
+                responseDto.setRoomType(room.getRoomType());
+                responseDto.setResponseStatus(ResponseStatus.SUCCESS);
+                
+                responseList.add(responseDto);
+            }
+            
+            System.out.println("test c"); // This matches the log mentioned in problem statement
+            System.out.println("Successfully mapped " + responseList.size() + " rooms to response DTOs");
+            
+        } catch (Exception e) {
+            System.err.println("Error suggesting rooms: " + e.getMessage());
+            e.printStackTrace(); // Print full stack trace for debugging
+            
+            // Return empty list with failure status in case of error
+            RoomResponseDto errorResponse = new RoomResponseDto();
+            errorResponse.setResponseStatus(ResponseStatus.FAILURE);
+            errorResponse.setDescription("Error suggesting rooms: " + e.getMessage());
+            responseList.add(errorResponse);
+        }
+        
+        return responseList;
     }
 }
