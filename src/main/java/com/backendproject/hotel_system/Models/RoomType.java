@@ -2,6 +2,7 @@ package com.backendproject.hotel_system.Models;
 
 public enum RoomType {
     SINGLE_BED,
+    DELUXE,
     DOUBLE_BED,
     TRIPLE_BED,
     FOUR_BED,

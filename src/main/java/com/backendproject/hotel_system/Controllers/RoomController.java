@@ -1,157 +1,158 @@
 package com.backendproject.hotel_system.Controllers;
 
-
-import com.backendproject.hotel_system.Dtos.CreateRoomRequestDto;
-import com.backendproject.hotel_system.Dtos.ResponseStatus;
-import com.backendproject.hotel_system.Dtos.SearchRoomRequestDto;
-import com.backendproject.hotel_system.Dtos.RoomResponseDto;
+//import com.backendproject.hotel_system.Dtos.*;
+import com.backendproject.hotel_system.Dtos.Requests.CreateRoomRequestDto;
+import com.backendproject.hotel_system.Dtos.Requests.RoomRequestDto;
+import com.backendproject.hotel_system.Dtos.Requests.SearchRoomRequestDto;
+import com.backendproject.hotel_system.Dtos.Requests.SuggestRoomRequest;
+import com.backendproject.hotel_system.Dtos.Responses.ApiResponse;
+import com.backendproject.hotel_system.Dtos.Responses.RoomResponseDto;
+import com.backendproject.hotel_system.Exceptions.RoomNotFoundException;
+import com.backendproject.hotel_system.Models.Hotel;
 import com.backendproject.hotel_system.Models.Room;
-import com.backendproject.hotel_system.repositories.RoomRepository;
+import com.backendproject.hotel_system.Strategies.RoomSuggestionStrategies.MaxGuestCapacitySuggestion;
+import com.backendproject.hotel_system.Strategies.RoomSuggestionStrategies.RoomSuggestionStrategy;
+import com.backendproject.hotel_system.services.HotelService;
 import com.backendproject.hotel_system.services.RoomService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
+@RequestMapping("/rooms")
 public class RoomController {
-
     @Autowired
     private RoomService roomService;
-
-    public RoomController(RoomService roomService) {
-        this.roomService = roomService;
-    }
-
-
-    @PostMapping(value = "/rooms")
-    public RoomResponseDto addRooms(@RequestBody CreateRoomRequestDto roomRequestDto) {
-        RoomResponseDto responseDto=new RoomResponseDto();;
-      try{
-          Room room = roomService.addRoom(roomRequestDto.getRoomNumber(),roomRequestDto.getPrice(),roomRequestDto.getDescription(),roomRequestDto.getRoomType(),roomRequestDto.getCapacity());
-          responseDto.setId(room.getId());
-          responseDto.setCreatedAt(room.getCreatedAt());
-          responseDto.setUpdatedAt(room.getUpdatedAt());
-          responseDto.setRoomNumber(room.getRoomNumber());
-          responseDto.setPrice(room.getPrice());
-          responseDto.setDescription(room.getDescription());
-          responseDto.setCapacity(room.getCapacity());
-          responseDto.setRoomType(room.getRoomType());
-          responseDto.setCapacity(room.getCapacity());
-          responseDto.setResponseStatus(ResponseStatus.SUCCESS);
-
-
-      }
-      catch (Exception e){
-
-        responseDto.setResponseStatus(ResponseStatus.FAILURE);
-      }
-
-      return  responseDto;
-    }
-    @GetMapping(value = "/rooms/{id}")
-    public RoomResponseDto getRoomById(SearchRoomRequestDto searchRoomRequestDto) {
-        RoomResponseDto responseDto = new RoomResponseDto();
-
+    @Autowired
+    private HotelService hotelService;
+    @PostMapping
+    @PreAuthorize("hasAuthority('HOTEL_ADD')")
+    public ResponseEntity<ApiResponse<RoomResponseDto>> addRoom(@RequestBody CreateRoomRequestDto roomRequestDto) {
         try {
-            long id = searchRoomRequestDto.getId();
-            Room room = roomService.getRoomById(id);
-
-            responseDto.setId(room.getId());
-            responseDto.setCreatedAt(room.getCreatedAt());
-            responseDto.setUpdatedAt(room.getUpdatedAt());
-            responseDto.setRoomNumber(room.getRoomNumber());
-            responseDto.setPrice(room.getPrice());
-            responseDto.setDescription(room.getDescription());
-            responseDto.setCapacity(room.getCapacity());
-            responseDto.setRoomType(room.getRoomType());
-            responseDto.setResponseStatus(ResponseStatus.SUCCESS);
+            boolean isAvailable = true;
+            Hotel hotel = hotelService.findHotelById(roomRequestDto.getHotelId());
+            Room room = roomService.save(
+                    roomRequestDto.getRoomNumber(),
+                    roomRequestDto.getPrice(),
+                    roomRequestDto.getDescription(),
+                    roomRequestDto.getRoomType().toUpperCase() ,
+                    roomRequestDto.getCapacity(),
+                    hotel,
+                    isAvailable
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>("success", "Room created successfully", RoomResponseDto.from(room)));
         } catch (Exception e) {
-            System.err.println("Error retrieving room by ID: " + e.getMessage());  // Logging the error
-            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>("failure", "Room creation failed: " + e.getMessage(), null));
         }
-
-        return responseDto;
     }
 
-    @GetMapping(value = "/rooms")
-    public List<RoomResponseDto>  getRooms(){
-
-            List<RoomResponseDto> responseList = new ArrayList<>();
-
-            try {
-                List<Room> rooms = roomService.getAllRooms();
-
-                for (Room room : rooms) {
-                    RoomResponseDto responseDto = new RoomResponseDto();
-                    responseDto.setId(room.getId());
-                    responseDto.setCreatedAt(room.getCreatedAt());
-                    responseDto.setUpdatedAt(room.getUpdatedAt());
-                    responseDto.setRoomNumber(room.getRoomNumber());
-                    responseDto.setPrice(room.getPrice());
-                    responseDto.setDescription(room.getDescription());
-                    responseDto.setCapacity(room.getCapacity());
-                    responseDto.setRoomType(room.getRoomType());
-                    responseDto.setResponseStatus(ResponseStatus.SUCCESS);
-
-                    responseList.add(responseDto);
-                }
-            } catch (Exception e) {
-                System.err.println("Error retrieving all rooms: " + e.getMessage());
-            }
-
-            return responseList;
-
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('HOTEL_VIEW')")
+    public ResponseEntity<ApiResponse<RoomResponseDto>> getRoomById(@PathVariable Long id) {
+        try {
+            Room room = roomService.getRoomById(id);
+            return ResponseEntity.ok(new ApiResponse<>("success", "Room fetched successfully", RoomResponseDto.from(room)));
+        } catch (RoomNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>("failure", "Room not found: " + e.getMessage(), null));
+        }
     }
-    @PatchMapping(value = "/rooms/{id}")
-    public RoomResponseDto updateRoom(@PathVariable Long id,@RequestBody SearchRoomRequestDto requestDto) {
-        RoomResponseDto responseDto=new RoomResponseDto();
+    @PreAuthorize("hasAuthority('HOTEL_VIEW')")
+    @GetMapping("/hotel/{hotelId}")
+    public ResponseEntity<ApiResponse<List<RoomResponseDto>>> getAllRooms(@PathVariable long hotelId) {
+        try {
+            List<Room> rooms = roomService.getAllRoomsByHotel(hotelId);
+                    List<RoomResponseDto> response=rooms.stream()
+                    .map(RoomResponseDto::from)
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(new ApiResponse<>("success", "Rooms fetched successfully", response));
+        } catch (RoomNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>("failure", "No rooms found", null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>("failure", "Something went wrong", null));
+        }
+    }
+    @PreAuthorize("hasAuthority('HOTEL_VIEW')")
+    @GetMapping("hotel/{hotelId}/type/{roomType}")
+    public ResponseEntity<ApiResponse<List<RoomResponseDto>>> getRoomsByType(@PathVariable long hotelId,@PathVariable String roomType) {
+        try {
+            List<Room> filteredRooms = roomService.getRoomByType(hotelId,roomType.toUpperCase());
+            List<RoomResponseDto> responseDtos = filteredRooms.stream()
+                    .map(RoomResponseDto::from)
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(new ApiResponse<>("success", "Rooms by type fetched successfully", responseDtos));
+        } catch (RoomNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>("failure", "No rooms of specified type found", null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>("failure", "Error fetching rooms by type", null));
+        }
+    }
+
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasAuthority('HOTEL_UPDATE')")
+    public ResponseEntity<ApiResponse<RoomResponseDto>> updateRoom(@PathVariable Long id, @RequestBody RoomRequestDto requestDto) {
         try {
             Room updatedRoom = roomService.getRoomById(id);
-            if (requestDto.getRoomNumber() != null) {
-                updatedRoom.setRoomNumber(requestDto.getRoomNumber());
-            }
-            if (requestDto.getRoomType() != null) {
-                updatedRoom.setRoomType(requestDto.getRoomType());
-            }
-            if (requestDto.getPrice() != null) {  // Fix: Checking null instead of 0.0
-                updatedRoom.setPrice(requestDto.getPrice());
-            }
-            if (requestDto.getCapacity() != 0) {
-                updatedRoom.setCapacity(requestDto.getCapacity());
-            }
-            if (requestDto.getDescription() != null) {
-                updatedRoom.setDescription(requestDto.getDescription());
-            }
-            Room room = roomService.updateRoom(updatedRoom);
-            responseDto.setId(room.getId());
-            responseDto.setRoomNumber(updatedRoom.getRoomNumber());
-            responseDto.setRoomType(updatedRoom.getRoomType());
-            responseDto.setPrice(updatedRoom.getPrice());
-            responseDto.setCapacity(updatedRoom.getCapacity());
-            responseDto.setDescription(updatedRoom.getDescription());
-            responseDto.setCreatedAt(updatedRoom.getCreatedAt());
-            responseDto.setUpdatedAt(updatedRoom.getUpdatedAt());
-            responseDto.setResponseStatus(ResponseStatus.SUCCESS);
 
+            if (requestDto.getRoomNumber() != null) updatedRoom.setRoomNumber(requestDto.getRoomNumber());
+            if (requestDto.getRoomType() != null) updatedRoom.setRoomType(requestDto.getRoomType());
+            if (requestDto.getPrice() != null) updatedRoom.setPrice(requestDto.getPrice());
+            if (requestDto.getCapacity() > 0) updatedRoom.setCapacity(requestDto.getCapacity());
+            if (requestDto.getDescription() != null) updatedRoom.setDescription(requestDto.getDescription());
+
+            Room room = roomService.updateRoom(updatedRoom);
+            return ResponseEntity.ok(new ApiResponse<>("success", "Room updated successfully", RoomResponseDto.from(room)));
         }
-        catch (Exception e){
-            responseDto.setDescription(e.getMessage());
-            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+        catch(RoomNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>("failure", "No rooms found", null));
         }
-        return  responseDto;
+        catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>("failure", "Room update failed: " + e.getMessage(), null));
+        }
     }
-    @DeleteMapping(value = "/rooms/{id}")
-    public RoomResponseDto deleteRoom(@PathVariable Long id) {
-        RoomResponseDto responseDto=new RoomResponseDto();
-        try{
+    @PreAuthorize("hasAuthority('HOTEL_DELETE')")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteRoom(@PathVariable Long id) {
+        try {
             roomService.deleteRoom(id);
-            responseDto.setResponseStatus(ResponseStatus.SUCCESS);
+            return ResponseEntity.ok(new ApiResponse<>("success", "Room deleted successfully", null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>("failure", "Room deletion failed: " + e.getMessage(), null));
         }
-        catch (Exception e){
-            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+    }
+    @PreAuthorize("hasAuthority('HOTEL_VIEW')")
+    @PostMapping("/hotel/{hotelId}/suggest")
+    public ResponseEntity<ApiResponse<List<RoomResponseDto>>> suggestRooms(
+            @PathVariable long hotelId,
+            @RequestBody SuggestRoomRequest searchRoomRequestDto,
+            @RequestParam(defaultValue = "maxGuestCapacity") String strategy
+    ) {
+        try {
+            List<Room> availableRooms = roomService.getAllRoomsByHotel(hotelId);
+            System.out.println(availableRooms+"test c");
+            List<Room> suggestedRooms = roomService.suggestedRooms(searchRoomRequestDto, availableRooms);
+            List<RoomResponseDto> responseDtos = suggestedRooms.stream()
+                    .map(RoomResponseDto::from)
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(new ApiResponse<>("success", "Suggested rooms fetched successfully", responseDtos));
+        } catch (RoomNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>("failure", "No suitable rooms found", null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>("failure", "Error suggesting rooms", null));
         }
-        return responseDto;
     }
 }

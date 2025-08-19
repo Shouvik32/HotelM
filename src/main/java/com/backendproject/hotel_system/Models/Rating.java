@@ -14,11 +14,6 @@ import lombok.Setter;
 @NoArgsConstructor
 @Entity
 public class Rating extends BaseModel {
-    @ManyToOne
-     Hotel hotel;
      double ratingValue;
-
      private long userId;
-
-
 }

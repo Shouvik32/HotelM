@@ -8,9 +8,19 @@ import java.util.Date;
 @MappedSuperclass
 @Data
 public class BaseModel {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date updatedAt;
+
+    private String createdBy;
+    private String updatedBy;
 
     public Long getId() {
         return id;
@@ -19,9 +29,6 @@ public class BaseModel {
     public void setId(Long id) {
         this.id = id;
     }
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date createdAt;
 
     public Date getCreatedAt() {
         return createdAt;
@@ -38,12 +45,6 @@ public class BaseModel {
     public void setUpdatedAt(Date updatedAt) {
         this.updatedAt = updatedAt;
     }
-
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date updatedAt;
-
-    private String createdBy;
-    private String updatedBy;
 
     @PrePersist
     protected void onCreate() {

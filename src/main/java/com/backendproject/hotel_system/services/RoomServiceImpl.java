@@ -1,16 +1,21 @@
 package com.backendproject.hotel_system.services;
 
+import com.backendproject.hotel_system.Dtos.Requests.RoomRequestDto;
+import com.backendproject.hotel_system.Dtos.Requests.SuggestRoomRequest;
 import com.backendproject.hotel_system.Exceptions.RoomNotFoundException;
+import com.backendproject.hotel_system.Models.Hotel;
 import com.backendproject.hotel_system.Models.Room;
 
 
 import com.backendproject.hotel_system.Models.RoomType;
+import com.backendproject.hotel_system.Strategies.RoomSuggestionStrategies.RoomSuggestionStrategy;
 import com.backendproject.hotel_system.repositories.RoomRepository;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,29 +23,28 @@ import java.util.Optional;
 @Getter
 @Setter
 public class RoomServiceImpl implements RoomService{
-    //private RestTemplate restTemplate;
+    @Autowired
     private RoomRepository roomRepository;
-
-    public RoomServiceImpl( RoomRepository roomRepository) {
-        this.roomRepository = roomRepository;
-    }
-
+    private RoomSuggestionStrategy roomSuggestionStrategy;
     @Override
-    public List<Room> getAllRooms() {
-        return roomRepository.findAll();
+    public List<Room> getAllRoomsByHotel(long hotelId) {
+        return roomRepository.findRoomsByHotelId(hotelId);
     }
     @Override
     public Room getRoomById(long id) {
-        return roomRepository.findById(id).get();
+        Optional<Room> room = roomRepository.findById(id);
+        if(room.isEmpty()) throw new RoomNotFoundException("Room not found");
+        return room.get();
     }
     @Override
-    public Room addRoom( String roomNumber, double price, String description, RoomType type,int capacity) {
+    public Room save(String roomNumber, double price, String description, String type, int capacity, Hotel hotel, boolean isAvailable) {
         Room room=new Room();
         room.setRoomNumber(roomNumber);
         room.setRoomType(RoomType.valueOf(String.valueOf(type)));
         room.setPrice(price);
         room.setDescription(description);
         room.setCapacity(capacity);
+        room.setHotel(hotel);
         return roomRepository.save(room);
 
     }
@@ -67,10 +71,8 @@ public class RoomServiceImpl implements RoomService{
         if(updatedRoom.getCapacity()!=0) {
             room.setCapacity(updatedRoom.getCapacity());
         }
-
-
+        room.setUpdatedAt(new Date());
         return roomRepository.save(room);
-
     }
     @Override
     public Room deleteRoom(long id) {
@@ -82,5 +84,16 @@ public class RoomServiceImpl implements RoomService{
         roomRepository.delete(room);
         return room;
     }
+    public  List<Room> getRoomByType(long hotelId,String  roomType) {
+        List<Room> getRoom = roomRepository.findByHotelIdAndRoomType(hotelId,RoomType.valueOf(roomType.toUpperCase()));
+        if (getRoom == null || getRoom.isEmpty()) {
+            throw new RoomNotFoundException("No rooms found for type: " + roomType);
+        }
+        return getRoom;
+    }
+    public List<Room> suggestedRooms(SuggestRoomRequest roomRequestDto, List<Room> availableRooms){
+        return roomSuggestionStrategy.suggestRooms(roomRequestDto, availableRooms);
+    }
+    }
 
-}
+
