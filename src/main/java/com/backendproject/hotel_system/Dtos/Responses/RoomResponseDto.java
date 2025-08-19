@@ -21,14 +21,24 @@ public class RoomResponseDto {
     private int capacity;
 
     public static RoomResponseDto from(Room room) {
-        if (room == null) return null;
-        RoomResponseDto dto = new RoomResponseDto();
-        dto.setId(room.getId());
-        dto.setRoomNumber(room.getRoomNumber());
-        dto.setRoomType(room.getRoomType());
-        dto.setPrice(room.getPrice());
-        dto.setCapacity(room.getCapacity());
-        dto.setDescription(room.getDescription());
-        return dto;
+        if (room == null) {
+            System.err.println("Warning: Null room passed to RoomResponseDto.from()");
+            return null;
+        }
+        
+        try {
+            RoomResponseDto dto = new RoomResponseDto();
+            dto.setId(room.getId());
+            dto.setRoomNumber(room.getRoomNumber());
+            dto.setRoomType(room.getRoomType());
+            dto.setPrice(room.getPrice());
+            dto.setCapacity(room.getCapacity());
+            dto.setDescription(room.getDescription());
+            return dto;
+        } catch (Exception e) {
+            System.err.println("Error mapping Room to RoomResponseDto: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 }
