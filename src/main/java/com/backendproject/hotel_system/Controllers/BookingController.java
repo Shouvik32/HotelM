@@ -77,8 +77,8 @@ public class BookingController {
         }
         BookingResponse bookingResponse = BookingResponse.fromInvoice(
                 invoice,
-                invoice.getBookedRooms().get(0).getBooking().getCheckInDate(),
-                invoice.getBookedRooms().get(0).getBooking().getCheckOutDate()
+                invoice.getBookingRooms().get(0).getBooking().getCheckInDate(),
+                invoice.getBookingRooms().get(0).getBooking().getCheckOutDate()
         );
         byte[] pdfBytes = PdfGenerator.generateBookingPdf(bookingResponse);
 

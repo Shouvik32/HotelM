@@ -5,18 +5,21 @@ import lombok.*;
 
 import java.util.Date;
 
+@Entity
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-
-public class BookingRoom extends BaseModel   {
+public class BookingRoom extends BaseModel {
 
     @ManyToOne
+    @JoinColumn(name = "booking_id") // foreign key
     private Booking booking;
+
     @ManyToOne
+    @JoinColumn(name = "room_id")
     private Room room;
+
     private Integer bookedRoomsCount;
 
     @Temporal(TemporalType.DATE)
@@ -24,5 +27,5 @@ public class BookingRoom extends BaseModel   {
 
     @Temporal(TemporalType.DATE)
     private Date checkOutDate;
-
 }
+

@@ -60,8 +60,14 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void logout(String token) {
-        return;
+    public void logout(String tokenString) {
+        Optional<Token> tokenOp = tokenRepository.findByToken(tokenString);
+        if (tokenOp.isPresent()) {
+            Token token = tokenOp.get();
+            token.setHasExpired(true);
+            token.setExpires(new Date());
+            tokenRepository.save(token);
+        }
     }
 
     @Override
@@ -95,19 +101,17 @@ public class AuthServiceImpl implements AuthService {
         return;
     }
 
-    @Override
     public User validateToken(Token token) {
-        Optional<Token> tokenOp = tokenRepository.findTopByUseridAndHasExpiredFalseOrderByCreatedAtDesc(token.getUserid());
-        if (tokenOp.isEmpty()) {
-            throw new UnAuthorizesAccess("You are not authorized to perform this action");
-        }
 
+        Optional<Token> tokenOp = tokenRepository.findByTokenAndHasExpiredFalse(token.getToken());
+        if (tokenOp.isEmpty()) {
+            throw new UnAuthorizesAccess("Token is invalid or has expired");
+        }
         var claims = Jwts.parser()
                 .setSigningKey(JWT_SECRET.getBytes())
                 .parseClaimsJws(token.getToken())
                 .getBody();
         String userId = claims.getSubject();
-
         Optional<User> userOp = userRepository.findById(Long.parseLong(userId));
         if (userOp.isEmpty()) {
             throw new UserNotFoundException("User not found");

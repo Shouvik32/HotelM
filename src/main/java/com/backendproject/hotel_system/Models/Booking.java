@@ -8,15 +8,24 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
-@Getter @Setter
-@NoArgsConstructor
 @Entity
+@Getter
+@Setter
+@NoArgsConstructor
 public class Booking extends BaseModel {
-     @ManyToOne
-     @JoinColumn(name = "customersession_id")
-     private CustomerSession customerSession;
-     @OneToMany
-     List<BookingRoom> bookedRooms;
-     private Date checkInDate;//yrs
-     private Date checkOutDate;
+    @ManyToOne
+    @JoinColumn(name = "customersession_id")
+    private CustomerSession customerSession;
+
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<BookingRoom> bookingRooms;
+
+    @Temporal(TemporalType.DATE)
+    private Date checkInDate;
+
+    @Temporal(TemporalType.DATE)
+    private Date checkOutDate;
+
+    @ManyToOne
+    private Hotel hotel;
 }

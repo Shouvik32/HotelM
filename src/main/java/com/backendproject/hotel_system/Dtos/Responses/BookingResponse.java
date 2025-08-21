@@ -25,13 +25,13 @@ public class BookingResponse {
     private Date checkOut;
 
     public static BookingResponse fromInvoice(com.backendproject.hotel_system.Models.Invoice invoice, Date checkin,Date checkout) {
-        if (invoice == null || invoice.getBookedRooms() == null || invoice.getBookedRooms().isEmpty()) {
+        if (invoice == null || invoice.getBookingRooms() == null || invoice.getBookingRooms().isEmpty()) {
             return null;
         }
         com.backendproject.hotel_system.Models.User user =
                 invoice.getCustomerSession().getUser();
-        String hotelName = invoice.getBookedRooms().get(0).getRoom().getHotel().getName();
-        List<String> roomNumbers = invoice.getBookedRooms().stream()
+        String hotelName = invoice.getBookingRooms().get(0).getRoom().getHotel().getName();
+        List<String> roomNumbers = invoice.getBookingRooms().stream()
                 .map(br -> br.getRoom().getRoomNumber())
                 .toList();
 

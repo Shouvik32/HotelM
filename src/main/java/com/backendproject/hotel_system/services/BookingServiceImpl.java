@@ -23,9 +23,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class BookingServiceImpl implements BookingServices {
@@ -102,10 +101,11 @@ public class BookingServiceImpl implements BookingServices {
             br.setCheckOutDate(checkOut);
             bookingRooms.add(br);
             totalRoomAmount += room.getPrice();
+            System.out.println(room.getPrice()+"price of each"+totalRoomAmount);
         }
         bookingRoomRepository.saveAll(bookingRooms);
 
-        booking.setBookedRooms(bookingRooms);
+        booking.setBookingRooms(bookingRooms);
         bookingRepository.save(booking);
 
         double serviceCharge = totalRoomAmount * 0.2;
@@ -114,7 +114,7 @@ public class BookingServiceImpl implements BookingServices {
 
         Invoice invoice = new Invoice();
         invoice.setBookingId(booking.getId());
-        invoice.setBookedRooms(bookingRooms);
+        invoice.setBookingRooms(bookingRooms);
         invoice.setTotalAmount(Math.round(totalAmount*100.0)/100);
         invoice.setGst(18);
         invoice.setServiceCharge(serviceCharge);
@@ -125,12 +125,64 @@ public class BookingServiceImpl implements BookingServices {
     }
     @Override
     public Invoice getInvoiceByBookingId(Long bookingId) {
-        // Assuming each booking has one invoice. You can adjust if your model is different.
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElse(null);
+        Booking booking = bookingRepository.findById(bookingId).orElse(null);
         if (booking == null) return null;
-        // If Invoice has booking reference, you can do:
-        return (Invoice) invoiceRepository.findByBookingId(booking.getId()).get();
-        // OR if Invoice is linked differently, you may need to search by session/rooms.
+
+        Long customerSessionId = booking.getCustomerSession() != null ? booking.getCustomerSession().getId() : null;
+        Long bookingHotelId = booking.getHotel() != null ? booking.getHotel().getId() : null;
+
+        Date bookingIn = truncateToDate(booking.getCheckInDate());
+        Date bookingOut = truncateToDate(booking.getCheckOutDate());
+
+        List<Invoice> candidates;
+        if (customerSessionId != null) {
+            candidates = invoiceRepository.findByCustomerSessionId(customerSessionId);
+        } else {
+            candidates = invoiceRepository.findAll();
+        }
+
+        Optional<Invoice> match = candidates.stream()
+                .filter(inv -> inv.getCustomerSession().getSessionStart() != null && inv.getCustomerSession().getSessionEnd() != null)
+                .filter(inv -> Objects.equals(truncateToDate(inv.getCustomerSession().getSessionStart()), bookingIn))
+                .filter(inv -> Objects.equals(truncateToDate(inv.getCustomerSession().getSessionEnd()), bookingOut))
+                .filter(inv -> Objects.equals(inv.getHotel() != null ? inv.getHotel().getId() : null, bookingHotelId))
+                .findFirst();
+
+        if (match.isPresent()) {
+            Invoice invoice = match.get();
+
+            List<BookingRoom> bookingRooms = booking.getBookingRooms() != null ? booking.getBookingRooms() : Collections.emptyList();
+            List<BookingRoom> invoiceRooms = invoice.getBookingRooms() != null ? invoice.getBookingRooms() : new ArrayList<>();
+
+            Set<Long> invoiceRoomIds = invoiceRooms.stream()
+                    .map(BookingRoom::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+            for (BookingRoom br : bookingRooms) {
+                if (br == null) continue;
+                Long brId = br.getId();
+                if (brId == null || !invoiceRoomIds.contains(brId)) {
+                    invoiceRooms.add(br);
+                    if (brId != null) invoiceRoomIds.add(brId);
+                }
+            }
+
+            invoice.setBookingRooms(invoiceRooms);
+            invoiceRepository.save(invoice);
+            return invoice;
+        }
+
+        return invoiceRepository.findByBookingId(booking.getId()).get();
+    }
+    private Date truncateToDate(Date d) {
+        if (d == null) return null;
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(d);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTime();
     }
 }

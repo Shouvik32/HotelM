@@ -11,4 +11,6 @@ public interface TokenRepository extends JpaRepository<Token, Long> {
     Optional<Token> findByUseridAndHasExpiredFalse(long userid);
     Optional<Token> findByToken(String token);
     Optional<Token> findTopByUseridAndHasExpiredFalseOrderByCreatedAtDesc(Long userid);
+
+    Optional<Token> findByTokenAndHasExpiredFalse(String token);
 }

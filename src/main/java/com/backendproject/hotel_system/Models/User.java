@@ -13,8 +13,8 @@ import java.util.List;
 @Data
 @Entity
 @NoArgsConstructor
+@AllArgsConstructor
 public class User extends BaseModel {
-
  private String firstName;
  private String lastName;
  private String email;
@@ -25,19 +25,4 @@ public class User extends BaseModel {
  private String city;
  private String state;
  private int zip;
-
-
- public User(String firstName, String userRole, String lastName, String email, String phone, String password, String address ,String city, String state, int zip) {
-  this.firstName = firstName;
-  this.userRole = userRole;
-  this.lastName = lastName;
-  this.email = email;
-  this.phone = phone;
-  this.password = password;
-  this.address = address;
-  this.city = city;
-  this.state = state;
-  this.zip = zip;
- }
-
 }

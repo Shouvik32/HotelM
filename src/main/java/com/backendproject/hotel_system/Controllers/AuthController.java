@@ -92,5 +92,25 @@ public class AuthController {
                     .body(new ApiResponse<>(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(), e.getMessage(), null));
         }
     }
+    @PostMapping("/signout")
+      public ResponseEntity<ApiResponse<String>> logout(@RequestHeader("Authorization") String authHeader){
+        try{
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(HttpStatus.BAD_REQUEST.toString(), "Invalid Authorization header", null));
+            }
+
+            String token = authHeader.substring(7); // remove "Bearer "
+
+            authService.logout(token);
+
+            return ResponseEntity.ok(new ApiResponse<>(HttpStatus.ACCEPTED.toString(), "Logout successful","Logged out Successfully"));
+        }
+        catch(Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(HttpStatus.INTERNAL_SERVER_ERROR.toString(), "Logout failed: " + e.getMessage(), null));
+        }
+    }
+
 
 }
