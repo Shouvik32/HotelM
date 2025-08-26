@@ -21,7 +21,7 @@ public class BookingRoom extends BaseModel {
     private Room room;
 
     private Integer bookedRoomsCount;
-
+    private double price;
     @Temporal(TemporalType.DATE)
     private Date checkInDate;
 

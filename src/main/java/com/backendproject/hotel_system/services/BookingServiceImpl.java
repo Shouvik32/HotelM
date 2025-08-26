@@ -3,13 +3,7 @@ package com.backendproject.hotel_system.services;
 import com.backendproject.hotel_system.Exceptions.RoomAlreadyBookedForDatesException;
 import com.backendproject.hotel_system.Exceptions.RoomNotFoundException;
 import com.backendproject.hotel_system.Exceptions.UserNotFoundException;
-import com.backendproject.hotel_system.Models.Booking;
-import com.backendproject.hotel_system.Models.BookingRoom;
-import com.backendproject.hotel_system.Models.CustomerSession;
-import com.backendproject.hotel_system.Models.CustomerSessionStatus;
-import com.backendproject.hotel_system.Models.Invoice;
-import com.backendproject.hotel_system.Models.Room;
-import com.backendproject.hotel_system.Models.User;
+import com.backendproject.hotel_system.Models.*;
 import com.backendproject.hotel_system.Strategies.BookingExpenses.BookingCalculationStrategyFactory;
 import com.backendproject.hotel_system.Strategies.BookingExpenses.ExpenseCalculationStrategy;
 import com.backendproject.hotel_system.Strategies.BookingExpenses.StrategyType;
@@ -58,7 +52,7 @@ public class BookingServiceImpl implements BookingServices {
 
     @Override
     @Transactional
-    public Invoice bookRoom(Long userId, List<Long> roomIds, Date checkIn, Date checkOut) {
+    public Invoice bookRoom(Long userId, List<Long> roomIds, Date checkIn, Date checkOut,StrategyType type) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
         CustomerSession session = customerSessionRepository.findFirstByUser_IdAndCustomerSessionStatus(
@@ -70,12 +64,10 @@ public class BookingServiceImpl implements BookingServices {
             newSession.setCustomerSessionStatus(CustomerSessionStatus.ACTIVE);
             return customerSessionRepository.save(newSession);
         });
-
         List<Room> rooms = roomRepository.findAllById(roomIds);
         if (rooms.size() != roomIds.size()) {
             throw new RoomNotFoundException("Some rooms do not exist");
         }
-
 
         for (Room room : rooms) {
             boolean isBooked = bookingRoomRepository.existsOverlappingBookingForRoom(room, checkIn, checkOut);
@@ -83,106 +75,150 @@ public class BookingServiceImpl implements BookingServices {
                 throw new RoomAlreadyBookedForDatesException("Room " + room.getId() + " is not available for the selected dates");
             }
         }
-
         Booking booking = new Booking();
         booking.setCustomerSession(session);
         booking.setCheckInDate(checkIn);
         booking.setCheckOutDate(checkOut);
+        booking.setHotel(rooms.get(0).getHotel());
         booking = bookingRepository.save(booking);
-
         List<BookingRoom> bookingRooms = new ArrayList<>();
         double totalRoomAmount = 0.0;
+        int i=0;
         for (Room room : rooms) {
+            i++;
             BookingRoom br = new BookingRoom();
             br.setBooking(booking);
             br.setRoom(room);
-            br.setBookedRoomsCount(1);
+            br.setBookedRoomsCount(i);
             br.setCheckInDate(checkIn);
             br.setCheckOutDate(checkOut);
+            br.setPrice(room.getPrice());
             bookingRooms.add(br);
             totalRoomAmount += room.getPrice();
-            System.out.println(room.getPrice()+"price of each"+totalRoomAmount);
+            System.out.print(room.getPrice());
         }
         bookingRoomRepository.saveAll(bookingRooms);
-
         booking.setBookingRooms(bookingRooms);
-        bookingRepository.save(booking);
 
         double serviceCharge = totalRoomAmount * 0.2;
-        ExpenseCalculationStrategy strategy = expenseCalculationStrategy.getStrategy(StrategyType.STANDARD);
-        double totalAmount = strategy.calculateBookingExpense(totalRoomAmount, serviceCharge,checkIn,checkOut);
+        ExpenseCalculationStrategy strategy = expenseCalculationStrategy.getStrategy(type);
+        double totalAmount = strategy.calculateBookingExpense(totalRoomAmount, serviceCharge, checkIn, checkOut);
+        totalAmount = Math.round(totalAmount * 100.0) / 100.0;
+        Invoice invoice = invoiceRepository.findExistingInvoice(
+                user.getId(),
+                rooms.get(0).getHotel().getId(),
+                checkIn,
+                checkOut
+        ).orElseGet(() -> {
+            Invoice newInvoice = new Invoice();
+            newInvoice.setCustomer(user);
+            newInvoice.setHotel(rooms.get(0).getHotel());
+            newInvoice.setCheckInDate(checkIn);
+            newInvoice.setCheckOutDate(checkOut);
+            newInvoice.setBookings(new ArrayList<>());
+            newInvoice.setRoomPrice(0.0);
+            newInvoice.setServiceCharge(0.0);
+            newInvoice.setGst(18);
+            newInvoice.setTotalAmount(0.0);
+            return newInvoice;
+        });
 
-        Invoice invoice = new Invoice();
-        invoice.setBookingId(booking.getId());
-        invoice.setBookingRooms(bookingRooms);
-        invoice.setTotalAmount(Math.round(totalAmount*100.0)/100);
-        invoice.setGst(18);
-        invoice.setServiceCharge(serviceCharge);
-        invoice.setCustomerSession(session);
+        invoice.getBookings().add(booking);
+        booking.setInvoice(invoice);
+        invoice.setRoomPrice(invoice.getRoomPrice() + totalRoomAmount);
+        invoice.setServiceCharge(invoice.getServiceCharge() + serviceCharge);
+        invoice.setTotalAmount(invoice.getTotalAmount() + totalAmount);
+
         invoice = invoiceRepository.save(invoice);
+        bookingRepository.save(booking);
 
         return invoice;
     }
+
+
     @Override
     public Invoice getInvoiceByBookingId(Long bookingId) {
+        Optional<Invoice> directInvoice = invoiceRepository.findByBookings_Id(bookingId);
+        if (directInvoice.isPresent()) {
+            return directInvoice.get();
+        }
         Booking booking = bookingRepository.findById(bookingId).orElse(null);
-        if (booking == null) return null;
+        if (booking == null) {
+            System.err.println("Booking not found: " + bookingId);
+            return null;
+        }
+        if (booking.getInvoice() != null) {
+            return booking.getInvoice();
+        }
 
-        Long customerSessionId = booking.getCustomerSession() != null ? booking.getCustomerSession().getId() : null;
-        Long bookingHotelId = booking.getHotel() != null ? booking.getHotel().getId() : null;
-
+        User customer = booking.getCustomerSession() != null ? booking.getCustomerSession().getUser() : null;
+        if (customer == null) {
+            System.err.println("Warning: Booking " + bookingId + " has no associated customer");
+            return null;
+        }
+        Hotel hotel = booking.getHotel();
+        if (hotel == null) {
+            System.err.println("Warning: Booking " + bookingId + " has no associated hotel");
+            return null;
+        }
         Date bookingIn = truncateToDate(booking.getCheckInDate());
         Date bookingOut = truncateToDate(booking.getCheckOutDate());
 
-        List<Invoice> candidates;
-        if (customerSessionId != null) {
-            candidates = invoiceRepository.findByCustomerSessionId(customerSessionId);
-        } else {
-            candidates = invoiceRepository.findAll();
-        }
 
-        Optional<Invoice> match = candidates.stream()
-                .filter(inv -> inv.getCustomerSession().getSessionStart() != null && inv.getCustomerSession().getSessionEnd() != null)
-                .filter(inv -> Objects.equals(truncateToDate(inv.getCustomerSession().getSessionStart()), bookingIn))
-                .filter(inv -> Objects.equals(truncateToDate(inv.getCustomerSession().getSessionEnd()), bookingOut))
-                .filter(inv -> Objects.equals(inv.getHotel() != null ? inv.getHotel().getId() : null, bookingHotelId))
-                .findFirst();
+        Optional<Invoice> match = invoiceRepository.findByCustomerAndHotelAndCheckInDateAndCheckOutDate(
+                customer, hotel, bookingIn, bookingOut
+        );
 
         if (match.isPresent()) {
             Invoice invoice = match.get();
+            boolean bookingExists = invoice.getBookings().stream()
+                    .anyMatch(b -> b.getId().equals(booking.getId()));
 
-            List<BookingRoom> bookingRooms = booking.getBookingRooms() != null ? booking.getBookingRooms() : Collections.emptyList();
-            List<BookingRoom> invoiceRooms = invoice.getBookingRooms() != null ? invoice.getBookingRooms() : new ArrayList<>();
-
-            Set<Long> invoiceRoomIds = invoiceRooms.stream()
-                    .map(BookingRoom::getId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-
-            for (BookingRoom br : bookingRooms) {
-                if (br == null) continue;
-                Long brId = br.getId();
-                if (brId == null || !invoiceRoomIds.contains(brId)) {
-                    invoiceRooms.add(br);
-                    if (brId != null) invoiceRoomIds.add(brId);
-                }
+            if (!bookingExists) {
+                invoice.getBookings().add(booking);
+                booking.setInvoice(invoice);
+                bookingRepository.save(booking); // Save the booking with updated invoice reference
             }
 
-            invoice.setBookingRooms(invoiceRooms);
-            invoiceRepository.save(invoice);
-            return invoice;
+            double totalRoomPrice = invoice.getBookings().stream()
+                    .flatMap(b -> b.getBookingRooms().stream())
+                    .mapToDouble(br -> br.getPrice())
+                    .sum();
+
+            double serviceCharge = totalRoomPrice * 0.2;
+            ExpenseCalculationStrategy strategy = expenseCalculationStrategy.getStrategy(StrategyType.STANDARD);
+            double totalAmount = strategy.calculateBookingExpense(totalRoomPrice, serviceCharge, bookingIn, bookingOut);
+
+            invoice.setRoomPrice(totalRoomPrice);
+            invoice.setServiceCharge(serviceCharge);
+            invoice.setTotalAmount(Math.round(totalAmount * 100.0) / 100.0);
+
+            return invoiceRepository.save(invoice);
         }
 
-        return invoiceRepository.findByBookingId(booking.getId()).get();
+        System.err.println("No invoice found for booking: " + bookingId);
+        return null;
+    }
+    @Transactional
+    public Invoice getInvoiceById(Long invoiceId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found with ID: " + invoiceId));
+        invoice.getBookings().forEach(b -> b.getBookingRooms().size());
+
+        return invoice;
+    }
+    public Booking getBookingById(Long bookingId){
+        return bookingRepository.findById(bookingId).orElse(null);
     }
     private Date truncateToDate(Date d) {
         if (d == null) return null;
         Calendar cal = Calendar.getInstance();
         cal.setTime(d);
-        cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MINUTE, 0);
         cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MILLISECOND, 0);
         return cal.getTime();
     }
+
 }

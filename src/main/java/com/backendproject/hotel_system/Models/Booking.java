@@ -3,16 +3,15 @@ package com.backendproject.hotel_system.Models;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 @Entity
 @Getter
 @Setter
 @NoArgsConstructor
 public class Booking extends BaseModel {
+
     @ManyToOne
     @JoinColumn(name = "customersession_id")
     private CustomerSession customerSession;
@@ -28,4 +27,8 @@ public class Booking extends BaseModel {
 
     @ManyToOne
     private Hotel hotel;
+
+    @ManyToOne
+    @JoinColumn(name = "invoice_id")
+    private Invoice invoice;
 }

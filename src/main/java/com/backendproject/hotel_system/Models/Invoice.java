@@ -3,26 +3,36 @@ package com.backendproject.hotel_system.Models;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.util.Map;
+
 @Entity
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 public class Invoice extends BaseModel {
-    private long bookingId;
-
-    @OneToMany(cascade = CascadeType.ALL)
-    @JoinColumn(name = "invoice_id") // foreign key in BookingRoom table
-    private List<BookingRoom> bookingRooms;
-
-    private double totalAmount;
-    private double gst;
-    private double serviceCharge;
 
     @ManyToOne
-    private CustomerSession customerSession;
+    @JoinColumn(name = "customer_id")
+    private User customer;
 
     @ManyToOne
+    @JoinColumn(name = "hotel_id")
     private Hotel hotel;
+
+    @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Booking> bookings = new ArrayList<>();
+
+    @Temporal(TemporalType.DATE)
+    private Date checkInDate;
+
+    @Temporal(TemporalType.DATE)
+    private Date checkOutDate;
+
+    private double roomPrice;
+    private double serviceCharge;
+    private double gst;
+    private double totalAmount;
 }

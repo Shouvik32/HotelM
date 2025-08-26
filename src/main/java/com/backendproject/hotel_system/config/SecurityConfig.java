@@ -1,51 +1,66 @@
 package com.backendproject.hotel_system.config;
 
 import com.backendproject.hotel_system.Filters.JwtAuthenticationFilter;
-import com.backendproject.hotel_system.repositories.TokenRepository;
-import com.backendproject.hotel_system.services.AuthService;
-import com.backendproject.hotel_system.services.RolewisePermissions;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private final AuthService authService;
-    private final TokenRepository tokenRepository;
-    private final RolewisePermissions rolewisePermissions;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final AccessHandler accessHandler;
 
-    public SecurityConfig(
-            AuthService authService,
-            TokenRepository tokenRepository,
-            RolewisePermissions rolewisePermissions,
-            JwtAuthenticationFilter jwtAuthenticationFilter // Inject filter here
-    ) {
-        this.authService = authService;
-        this.tokenRepository = tokenRepository;
-        this.rolewisePermissions = rolewisePermissions;
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          AccessHandler accessHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.accessHandler = accessHandler;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/user/auth/**").permitAll()
-                        .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/hotels/**").permitAll()
+                        .requestMatchers("/user/auth/**", "/auth/**", "/", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class); // Use injected bean
-
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(accessHandler)
+                        .accessDeniedHandler(accessHandler)
+                )
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration cfg = new CorsConfiguration();
+        cfg.setAllowedOrigins(List.of("*"));
+        cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS"));
+        cfg.setAllowedHeaders(List.of("*"));
+        cfg.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
+        src.registerCorsConfiguration("/**", cfg);
+        return src;
+    }
+
+
 }

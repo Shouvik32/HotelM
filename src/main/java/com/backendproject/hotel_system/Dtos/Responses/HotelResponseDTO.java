@@ -29,7 +29,6 @@ public class HotelResponseDTO {
         dto.setId(hotel.getId());
         dto.setName(hotel.getName());
         dto.setStars(hotel.getStars() != null ? hotel.getStars().toString() : null);
-        //dto.setRatingName(hotel.getRating() != null ? hotel.getRating().getName() : null);
         if (hotel.getLocation() != null) {
             dto.setLocationId(hotel.getLocation().getId());
             dto.setLocationAddress(hotel.getLocation().getAddress());
